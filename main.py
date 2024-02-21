@@ -1,18 +1,17 @@
 import argparse
 import sys
-import io
 import requests
 import os
-from pypdf import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import GPT4AllEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_community.llms import GPT4All
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
 from langchain import hub
 from langchain_core.runnables import RunnablePassthrough, RunnablePick
+from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceInstructEmbeddings
+from langchain_core.prompts import ChatPromptTemplate
 
 headers = {'User-Agent': 'Mozilla/5.0 (X11; Windows; Windows x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Safari/537.36'}
 
@@ -21,7 +20,7 @@ class AnswerSystem:
     def __init__(self, link, quest, mode):
         self.link = link
         self.quest = quest
-        self.mode = mode
+        self.mode = 'cuda' if mode == 'gpu' else mode
 
         self.llm = GPT4All(
             model="model/gpt4all-falcon-newbpe-q4_0.gguf",
@@ -42,38 +41,36 @@ class AnswerSystem:
         if os.path.exists("temp.pdf"):
             os.remove("temp.pdf")
 
-        self.db = FAISS.from_documents(documents=pages, embedding=GPT4AllEmbeddings())
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-mpnet-base-v2",
+            model_kwargs= {'device': self.mode},
+            encode_kwargs={'normalize_embeddings': True}
+        )
+
+        self.db = FAISS.from_documents(documents=pages, embedding=embeddings).as_retriever(search_type="mmr", search_kwargs={"score_threshold": 0.5, "k": 1})
 
     def make_chain(self):
-        # Prompt
-        # prompt = PromptTemplate.from_template(
-        #     "Summarize the main themes in these retrieved docs: {docs}"
-        # )
 
-        # Chain
-        def format_docs(docs):
-            return "\n\n".join(doc.page_content for doc in docs)
+        # docs, scores = zip(*self.db.similarity_search_with_score(self.quest))
+        # print(scores)
+        docs = self.db.get_relevant_documents(self.quest)
 
-        # chain = {"docs": format_docs} | prompt | self.llm | StrOutputParser()
+        template = """Answer the question based only on the following context:
+        {context}
 
-        # Run
-        docs = self.db.similarity_search(self.quest)[:2]
-        # chain.invoke(docs)
-        #///////////////////////////
-        rag_prompt = hub.pull("rlm/rag-prompt")
-        # rag_prompt.messages
+        Question: {question}
+        """
+        prompt = ChatPromptTemplate.from_template(template)
 
-        # Chain
         chain = (
-            RunnablePassthrough.assign(context=RunnablePick("context") | format_docs)
-            | rag_prompt
+            {"context": self.db, "question": RunnablePassthrough()}
+            | prompt
             | self.llm
             | StrOutputParser()
         )
 
-        # Run
-        res = chain.invoke({"context": docs, "question": self.quest})
-        print(res)
+        res = chain.invoke(self.quest)
+        print('ANSWER:', res)
 
 
 def main(link, quest, mode):
