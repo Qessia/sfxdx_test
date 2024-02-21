@@ -1,18 +1,16 @@
 import argparse
 import sys
-import io
 import requests
 import os
-from pypdf import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import GPT4AllEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_community.llms import GPT4All
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
 from langchain import hub
 from langchain_core.runnables import RunnablePassthrough, RunnablePick
+from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceInstructEmbeddings
 
 headers = {'User-Agent': 'Mozilla/5.0 (X11; Windows; Windows x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Safari/537.36'}
 
@@ -42,28 +40,22 @@ class AnswerSystem:
         if os.path.exists("temp.pdf"):
             os.remove("temp.pdf")
 
-        self.db = FAISS.from_documents(documents=pages, embedding=GPT4AllEmbeddings())
+        embeddings = HuggingFaceInstructEmbeddings(
+            model_name="hkunlp/instructor-large",
+            model_kwargs= {'device': self.mode},
+            encode_kwargs={'normalize_embeddings': True}
+        )
+
+        self.db = FAISS.from_documents(documents=pages, embedding=embeddings)
 
     def make_chain(self):
-        # Prompt
-        # prompt = PromptTemplate.from_template(
-        #     "Summarize the main themes in these retrieved docs: {docs}"
-        # )
-
-        # Chain
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
 
-        # chain = {"docs": format_docs} | prompt | self.llm | StrOutputParser()
-
-        # Run
         docs = self.db.similarity_search(self.quest)[:2]
-        # chain.invoke(docs)
-        #///////////////////////////
-        rag_prompt = hub.pull("rlm/rag-prompt")
-        # rag_prompt.messages
 
-        # Chain
+        rag_prompt = hub.pull("rlm/rag-prompt")
+
         chain = (
             RunnablePassthrough.assign(context=RunnablePick("context") | format_docs)
             | rag_prompt
@@ -71,7 +63,6 @@ class AnswerSystem:
             | StrOutputParser()
         )
 
-        # Run
         res = chain.invoke({"context": docs, "question": self.quest})
         print(res)
 
