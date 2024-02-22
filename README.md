@@ -20,9 +20,9 @@ Made with Langchain and its' modules:
 ## Usage
 `python run.py {link} {question} {mode}`
 where:
-    - link - URL of PDF
-    - question - your question "in brackets"
-    - mode - "cpu" or "gpu" for embeddings
+- `link` URL of PDF
+- `question` your question "in brackets"
+- `mode` "cpu" or "gpu" for embeddings
 
 ## Tests
 Script was tested on:
