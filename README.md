@@ -8,8 +8,9 @@ Made with Langchain and its' modules:
 - LLM from GPT4All model: Falcon
 
 ## Preparation
-- Download LLM model from GPT4All to `./model` directory: https://gpt4all.io/models/gguf/gpt4all-falcon-newbpe-q4_0.gguf
+- Install Python <= 3.11
 - Install requirements: `pip install -r requirements.txt`
+- Download LLM model from GPT4All to `./model` directory: https://gpt4all.io/models/gguf/gpt4all-falcon-newbpe-q4_0.gguf
 
 ## To run on GPU
 1. Install CUDA and cuDNN compatible with your system and GPU
