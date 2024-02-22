@@ -160,5 +160,4 @@ cython_debug/
 #.idea/
 
 # My test files
-test.txt
-model/
+*.gguf
